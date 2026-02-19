@@ -5,6 +5,12 @@ homepage: https://github.com/vittor1o/rollbar-openclaw-skill
 metadata:
   openclaw:
     emoji: "🐛"
+    requires:
+      env:
+        - ROLLBAR_ACCESS_TOKEN
+      bins:
+        - curl
+        - python3
 ---
 
 # Rollbar Skill
@@ -19,10 +25,12 @@ Set your Rollbar access token as an environment variable:
 export ROLLBAR_ACCESS_TOKEN=your-token
 ```
 
+> **⚠️ Security:** Store tokens in environment variables or a secure secret manager — never commit them to repository files.
+
 **Two token types are supported:**
 
-- **Account-level token** (recommended for multi-project setups) — found in Rollbar → Account Settings → Account Access Tokens. Use `--project-id <id>` to target specific projects. The skill auto-resolves a project read token from the account token.
-- **Project-level token** — found in Rollbar → Project → Settings → Project Access Tokens (use one with `read` scope; add `write` scope to resolve/mute items).
+- **Project-level token** (recommended) — found in Rollbar → Project → Settings → Project Access Tokens. Use a token with `read` scope for monitoring; add `write` scope only if you need to resolve/mute items. This is the most restrictive and safest option for single-project use.
+- **Account-level token** (for multi-project setups) — found in Rollbar → Account Settings → Account Access Tokens. Use `--project-id <id>` to target specific projects. The skill auto-resolves a project read token from the account token. Note: account tokens grant broader access — only use when you need to monitor multiple projects.
 
 ## Commands
 

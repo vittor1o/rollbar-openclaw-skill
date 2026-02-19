@@ -21,13 +21,17 @@ Or manually clone this repo into your OpenClaw workspace `skills/` directory.
 
 ## Setup
 
-Set your Rollbar project access token:
+Set your Rollbar access token as an environment variable:
 
 ```bash
 export ROLLBAR_ACCESS_TOKEN=your-token-here
 ```
 
-Find your token in Rollbar → Project → Settings → Project Access Tokens. Use a token with `read` scope (add `write` if you want to resolve/mute items).
+> **⚠️ Security:** Store tokens in environment variables or a secure secret manager — never commit them to repository files.
+
+**Token types:**
+- **Project token** (recommended) — Rollbar → Project → Settings → Project Access Tokens. Use `read` scope; add `write` only if you need to resolve/mute items.
+- **Account token** (multi-project) — Rollbar → Account Settings → Account Access Tokens. Use with `--project-id <id>` to target specific projects.
 
 ## Usage
 
