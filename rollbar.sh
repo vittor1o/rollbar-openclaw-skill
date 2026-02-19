@@ -110,6 +110,24 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# --- Input validation ---
+# ITEM_ID: must be alphanumeric (Rollbar item IDs are numeric)
+if [[ -n "$ITEM_ID" && ! "$ITEM_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "Error: Invalid item ID: $ITEM_ID" >&2; exit 1
+fi
+# PROJECT_ID: must be numeric
+if [[ -n "$PROJECT_ID" && ! "$PROJECT_ID" =~ ^[0-9]+$ ]]; then
+  echo "Error: Invalid project ID: $PROJECT_ID" >&2; exit 1
+fi
+# LIMIT: must be numeric
+if [[ ! "$LIMIT" =~ ^[0-9]+$ ]]; then
+  echo "Error: Invalid limit: $LIMIT" >&2; exit 1
+fi
+# HOURS: must be numeric
+if [[ ! "$HOURS" =~ ^[0-9]+$ ]]; then
+  echo "Error: Invalid hours: $HOURS" >&2; exit 1
+fi
+
 # If project-id is given and we have an account token, resolve a project-level token
 if [[ -n "$PROJECT_ID" && "$COMMAND" != "projects" ]]; then
   PROJECT_TOKEN=$(get_project_token "$PROJECT_ID")
@@ -141,12 +159,13 @@ print(json.dumps(result, indent=2))
     PARAMS="?page=1&sort=last_occurrence"
     [[ -n "$STATUS" ]] && PARAMS="$PARAMS&status=$STATUS"
     [[ -n "$LEVEL" ]] && PARAMS="$PARAMS&level=$LEVEL"
-    api_get "items$PARAMS" | python3 -c "
-import json, sys
+    api_get "items$PARAMS" | _LIMIT="$LIMIT" python3 -c "
+import json, sys, os
 data = json.load(sys.stdin)
 items = data.get('result', {}).get('items', data.get('result', []))
+limit = int(os.environ['_LIMIT'])
 if isinstance(items, list):
-    items = items[:$LIMIT]
+    items = items[:limit]
 result = []
 for i in items:
     result.append({
@@ -200,13 +219,14 @@ print(json.dumps(result, indent=2))
   top)
     PARAMS="?status=active&sort=total_occurrences&direction=desc&page=1"
     [[ -n "$LEVEL" ]] && PARAMS="$PARAMS&level=$LEVEL"
-    api_get "items$PARAMS" | python3 -c "
-import json, sys
+    api_get "items$PARAMS" | _HOURS="$HOURS" _LIMIT="$LIMIT" python3 -c "
+import json, sys, os
 from datetime import datetime, timedelta, timezone
 
 data = json.load(sys.stdin)
 items = data.get('result', {}).get('items', data.get('result', []))
-hours = $HOURS
+hours = int(os.environ['_HOURS'])
+limit = int(os.environ['_LIMIT'])
 cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
 print(json.dumps({
@@ -221,7 +241,7 @@ print(json.dumps({
         'environment': i.get('environment', ''),
     } for i in (items if isinstance(items, list) else [])
       if i.get('last_occurrence_timestamp', 0) >= cutoff.timestamp()
-    ][:int('$LIMIT')]
+    ][:limit]
 }, indent=2))
 " 2>/dev/null || api_get "items$PARAMS"
     ;;
