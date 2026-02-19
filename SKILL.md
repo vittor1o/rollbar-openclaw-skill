@@ -13,29 +13,31 @@ Monitor and manage Rollbar errors directly from OpenClaw.
 
 ## Setup
 
-Add your Rollbar **project read access token** to your workspace `TOOLS.md`:
+Set your Rollbar access token as an environment variable:
 
-```markdown
-## Rollbar
-- **Access Token:** `your-rollbar-project-token`
-- **Account Slug:** `your-account` (optional, for dashboard links)
-```
-
-Or set the environment variable:
 ```bash
 export ROLLBAR_ACCESS_TOKEN=your-token
 ```
 
-The token is found in Rollbar → Project → Settings → Project Access Tokens (use one with `read` scope; add `write` scope if you want to resolve/mute items).
+**Two token types are supported:**
+
+- **Account-level token** (recommended for multi-project setups) — found in Rollbar → Account Settings → Account Access Tokens. Use `--project-id <id>` to target specific projects. The skill auto-resolves a project read token from the account token.
+- **Project-level token** — found in Rollbar → Project → Settings → Project Access Tokens (use one with `read` scope; add `write` scope to resolve/mute items).
 
 ## Commands
 
 All commands use the helper script `rollbar.sh` in this skill directory.
 
+### List projects (account token only)
+
+```bash
+./skills/rollbar/rollbar.sh projects
+```
+
 ### List recent items (errors/warnings)
 
 ```bash
-./skills/rollbar/rollbar.sh items [--status active|resolved|muted] [--level critical|error|warning|info] [--limit 20]
+./skills/rollbar/rollbar.sh items [--project-id <id>] [--status active|resolved|muted] [--level critical|error|warning|info] [--limit 20]
 ```
 
 ### Get item details

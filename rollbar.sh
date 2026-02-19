@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # rollbar.sh — Rollbar API helper for OpenClaw
+# Supports both account-level and project-level tokens.
 # Usage: rollbar.sh <command> [options]
 
 set -euo pipefail
@@ -36,26 +37,47 @@ usage() {
 Usage: rollbar.sh <command> [options]
 
 Commands:
-  items         List recent items
-  item <id>     Get item details
-  occurrences <id>  Get occurrences for an item
-  resolve <id>  Resolve an item
-  mute <id>     Mute an item
-  activate <id> Reopen an item
-  deploys       List recent deploys
-  project       Get project info
-  top           Top active items by occurrence count
+  projects              List all projects (account token)
+  items                 List recent items
+  item <id>             Get item details
+  occurrences <id>      Get occurrences for an item
+  resolve <id>          Resolve an item
+  mute <id>             Mute an item
+  activate <id>         Reopen an item
+  deploys               List recent deploys
+  project               Get project info
+  top                   Top active items by occurrence count
 
 Options:
+  --project-id <id>     Target a specific project (for account tokens)
   --status <active|resolved|muted>   Filter by status (items)
   --level <critical|error|warning|info>  Filter by level (items)
-  --limit <n>                        Max results (default: 20)
-  --hours <n>                        Time window for 'top' (default: 24)
+  --limit <n>           Max results (default: 20)
+  --hours <n>           Time window for 'top' (default: 24)
 
 Environment:
-  ROLLBAR_ACCESS_TOKEN   Required. Your Rollbar project access token.
+  ROLLBAR_ACCESS_TOKEN  Required. Account or project access token.
 EOF
   exit 0
+}
+
+# Helper: get project tokens from account token
+get_project_token() {
+  local project_id="$1"
+  local tmpfile
+  tmpfile=$(mktemp)
+  api_get "project/$project_id/access_tokens" > "$tmpfile" 2>/dev/null
+  local result
+  result=$(python3 -c "
+import json
+with open('$tmpfile') as f:
+    tokens = json.load(f).get('result', [])
+for t in tokens:
+    if 'read' in t.get('scopes', []):
+        print(t['access_token']); break
+" 2>/dev/null)
+  rm -f "$tmpfile"
+  echo "$result"
 }
 
 # --- Parse command ---
@@ -69,13 +91,15 @@ LEVEL=""
 LIMIT="20"
 HOURS="24"
 ITEM_ID=""
+PROJECT_ID=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --status)  STATUS="$2"; shift 2 ;;
-    --level)   LEVEL="$2"; shift 2 ;;
-    --limit)   LIMIT="$2"; shift 2 ;;
-    --hours)   HOURS="$2"; shift 2 ;;
+    --status)      STATUS="$2"; shift 2 ;;
+    --level)       LEVEL="$2"; shift 2 ;;
+    --limit)       LIMIT="$2"; shift 2 ;;
+    --hours)       HOURS="$2"; shift 2 ;;
+    --project-id)  PROJECT_ID="$2"; shift 2 ;;
     *)
       if [[ -z "$ITEM_ID" ]]; then
         ITEM_ID="$1"; shift
@@ -86,13 +110,58 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# If project-id is given and we have an account token, resolve a project-level token
+if [[ -n "$PROJECT_ID" && "$COMMAND" != "projects" ]]; then
+  PROJECT_TOKEN=$(get_project_token "$PROJECT_ID")
+  if [[ -n "$PROJECT_TOKEN" ]]; then
+    TOKEN="$PROJECT_TOKEN"
+  fi
+fi
+
 # --- Commands ---
 case "$COMMAND" in
+  projects)
+    api_get "projects" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+projects = data.get('result', [])
+result = []
+for p in projects:
+    result.append({
+        'id': p['id'],
+        'name': p['name'],
+        'status': p.get('status', '?'),
+        'date_created': p.get('date_created'),
+    })
+print(json.dumps(result, indent=2))
+"
+    ;;
+
   items)
     PARAMS="?page=1&sort=last_occurrence"
     [[ -n "$STATUS" ]] && PARAMS="$PARAMS&status=$STATUS"
     [[ -n "$LEVEL" ]] && PARAMS="$PARAMS&level=$LEVEL"
-    api_get "items$PARAMS" | python3 -m json.tool 2>/dev/null || api_get "items$PARAMS"
+    api_get "items$PARAMS" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+items = data.get('result', {}).get('items', data.get('result', []))
+if isinstance(items, list):
+    items = items[:$LIMIT]
+result = []
+for i in items:
+    result.append({
+        'id': i['id'],
+        'counter': i.get('counter'),
+        'title': i.get('title', '')[:150],
+        'level': i.get('level_string', i.get('level', '')),
+        'status': i.get('status', ''),
+        'total_occurrences': i.get('total_occurrences', 0),
+        'last_occurrence': i.get('last_occurrence_timestamp'),
+        'environment': i.get('environment', ''),
+        'framework': i.get('framework', ''),
+    })
+print(json.dumps(result, indent=2))
+"
     ;;
 
   item)
@@ -129,7 +198,6 @@ case "$COMMAND" in
     ;;
 
   top)
-    # Get active items sorted by total_occurrences, filter by time window
     PARAMS="?status=active&sort=total_occurrences&direction=desc&page=1"
     [[ -n "$LEVEL" ]] && PARAMS="$PARAMS&level=$LEVEL"
     api_get "items$PARAMS" | python3 -c "
