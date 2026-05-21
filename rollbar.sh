@@ -6,13 +6,20 @@
 set -euo pipefail
 
 # --- Config ---
-# Priority: workspace secrets file > env var
+# Source workspace .env if present (per-agent token overrides)
+# shellcheck source=/dev/null
+[[ -f "$PWD/.env" ]] && source "$PWD/.env" 2>/dev/null
+
+# Priority: secrets/rollbar file > ROLLBAR_ACCESS_TOKEN (from .env or injected env var)
 TOKEN=$(cat "$PWD/secrets/rollbar" 2>/dev/null || echo "${ROLLBAR_ACCESS_TOKEN:-}")
 BASE_URL="https://api.rollbar.com/api/1"
 
 if [[ -z "$TOKEN" ]]; then
   echo "Error: No Rollbar token found." >&2
-  echo "Either create \$WORKSPACE/secrets/rollbar (one line = token) or set ROLLBAR_ACCESS_TOKEN env var." >&2
+  echo "Options (first match wins):" >&2
+  echo "  1. \$PWD/secrets/rollbar  — one-line token file in agent workspace" >&2
+  echo "  2. \$PWD/.env             — set ROLLBAR_ACCESS_TOKEN=<token>" >&2
+  echo "  3. ROLLBAR_ACCESS_TOKEN  — environment variable" >&2
   exit 1
 fi
 
@@ -57,8 +64,9 @@ Options:
   --hours <n>           Time window for 'top' (default: 24)
 
 Token resolution (first match wins):
-  \$PWD/secrets/rollbar      One-line file in the calling agent's workspace
-  ROLLBAR_ACCESS_TOKEN      Environment variable fallback
+  \$PWD/secrets/rollbar      One-line token file in the calling agent's workspace
+  \$PWD/.env                 File with ROLLBAR_ACCESS_TOKEN=<token>
+  ROLLBAR_ACCESS_TOKEN      Environment variable (injected or shell)
 EOF
   exit 0
 }
