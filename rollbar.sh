@@ -6,12 +6,13 @@
 set -euo pipefail
 
 # --- Config ---
-TOKEN="${ROLLBAR_ACCESS_TOKEN:-}"
+# Priority: workspace secrets file > env var
+TOKEN=$(cat "$PWD/secrets/rollbar" 2>/dev/null || echo "${ROLLBAR_ACCESS_TOKEN:-}")
 BASE_URL="https://api.rollbar.com/api/1"
 
 if [[ -z "$TOKEN" ]]; then
-  echo "Error: ROLLBAR_ACCESS_TOKEN is not set." >&2
-  echo "Set it via environment variable or add it to TOOLS.md." >&2
+  echo "Error: No Rollbar token found." >&2
+  echo "Either create \$WORKSPACE/secrets/rollbar (one line = token) or set ROLLBAR_ACCESS_TOKEN env var." >&2
   exit 1
 fi
 
@@ -55,8 +56,9 @@ Options:
   --limit <n>           Max results (default: 20)
   --hours <n>           Time window for 'top' (default: 24)
 
-Environment:
-  ROLLBAR_ACCESS_TOKEN  Required. Account or project access token.
+Token resolution (first match wins):
+  \$PWD/secrets/rollbar      One-line file in the calling agent's workspace
+  ROLLBAR_ACCESS_TOKEN      Environment variable fallback
 EOF
   exit 0
 }
