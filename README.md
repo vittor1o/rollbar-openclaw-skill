@@ -21,13 +21,29 @@ Or manually clone this repo into your OpenClaw workspace `skills/` directory.
 
 ## Setup
 
-Set your Rollbar access token as an environment variable:
+The script resolves your Rollbar token from the first matching source:
+
+| Priority | Method | How |
+|---|---|---|
+| 1 | `$PWD/secrets/rollbar` | One-line file in your agent workspace containing the token |
+| 2 | `$PWD/.env` | `ROLLBAR_ACCESS_TOKEN=your-token` in your agent workspace |
+| 3 | `ROLLBAR_ACCESS_TOKEN` | Environment variable (injected or shell) |
+
+**Option A — `.env` file (recommended):**
 
 ```bash
-export ROLLBAR_ACCESS_TOKEN=your-token-here
+# workspace-myagent/.env
+ROLLBAR_ACCESS_TOKEN=your-token-here
 ```
 
-> **⚠️ Security:** Store tokens in environment variables or a secure secret manager — never commit them to repository files.
+**Option B — secrets file:**
+
+```bash
+# workspace-myagent/secrets/rollbar
+your-token-here
+```
+
+> **⚠️ Security:** Never commit tokens. Use workspace-local files or environment variables only.
 
 **Token types:**
 - **Project token** (recommended) — Rollbar → Project → Settings → Project Access Tokens. Use `read` scope; add `write` only if you need to resolve/mute items.
