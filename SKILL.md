@@ -1,6 +1,6 @@
 ---
 name: rollbar
-version: 1.4.0
+version: 1.5.0
 description: "Monitor and manage Rollbar error tracking. List recent items, get item details, resolve/mute issues, track deployments, and manage project access tokens via the Rollbar API."
 homepage: https://github.com/vittor1o/rollbar-openclaw-skill
 metadata:
@@ -10,6 +10,30 @@ metadata:
       bins:
         - curl
         - python3
+    permissions:
+      shell: exec
+      env:
+        read:
+          - ROLLBAR_ACCESS_TOKEN
+          - ROLLBAR_CONFIG_FILE
+      network:
+        outbound:
+          - https://api.rollbar.com
+      files:
+        read:
+          - .rollbar-mcp.json
+          - secrets/rollbar
+          - .env
+        write:
+          - .rollbar-mcp.json
+    safety:
+      destructive_commands:
+        - resolve
+        - mute
+        - activate
+        - project-token-create
+        - project-token-update
+      interlock: "--yes or --dry-run required for state-changing commands"
 ---
 
 # Rollbar Skill
@@ -92,20 +116,26 @@ All commands use the helper script `rollbar.sh` in this skill directory.
 ### Resolve an item
 
 ```bash
-./skills/rollbar/rollbar.sh resolve <item_id>
+./skills/rollbar/rollbar.sh resolve <item_id> --yes
+# or preview without making changes:
+./skills/rollbar/rollbar.sh resolve <item_id> --dry-run
 ```
 
 ### Mute an item
 
 ```bash
-./skills/rollbar/rollbar.sh mute <item_id>
+./skills/rollbar/rollbar.sh mute <item_id> --yes
 ```
 
 ### Activate (reopen) an item
 
 ```bash
-./skills/rollbar/rollbar.sh activate <item_id>
+./skills/rollbar/rollbar.sh activate <item_id> --yes
 ```
+
+> **Safety interlock:** `resolve`, `mute`, `activate`, `project-token-create`, and `project-token-update`
+> require `--yes` to execute or `--dry-run` to preview. Omitting both prints a warning and exits with
+> an error — preventing silent state changes from mistaken or manipulated invocations.
 
 ### List deploys
 
@@ -161,9 +191,9 @@ Token values are truncated in output (first 8 chars + `...`) for safety.
 export ROLLBAR_ACCESS_TOKEN=your-account-token
 
 # Create tokens for each project and save to MCP config
-./rollbar.sh project-token-create --project-id 378962  --name "linkz-api-agent"       --scopes read,write --project-name linkz-api       --save
-./rollbar.sh project-token-create --project-id 462118  --name "linkz-dashboard-agent"  --scopes read,write --project-name linkz-dashboard  --save
-./rollbar.sh project-token-create --project-id 755542  --name "linkz-php-agent"        --scopes read,write --project-name linkz-php        --save
+./rollbar.sh project-token-create --project-id 378962  --name "linkz-api-agent"       --scopes read,write --project-name linkz-api       --save --yes
+./rollbar.sh project-token-create --project-id 462118  --name "linkz-dashboard-agent"  --scopes read,write --project-name linkz-dashboard  --save --yes
+./rollbar.sh project-token-create --project-id 755542  --name "linkz-php-agent"        --scopes read,write --project-name linkz-php        --save --yes
 
 # Now use per-project tokens directly from config
 ./rollbar.sh items --project-name linkz-api

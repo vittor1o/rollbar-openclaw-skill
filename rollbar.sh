@@ -122,7 +122,7 @@ shift
 # --- Parse options ---
 STATUS="" LEVEL="" LIMIT="20" HOURS="24" ITEM_ID=""
 PROJECT_ID="" PROJECT_NAME="" TOKEN_NAME="" SCOPES="read,write"
-TOKEN_STATUS_VAL="" SAVE_TOKEN=false
+TOKEN_STATUS_VAL="" SAVE_TOKEN=false DRY_RUN=false YES=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -136,6 +136,8 @@ while [[ $# -gt 0 ]]; do
     --scopes)         SCOPES="$2"; shift 2 ;;
     --token-status)   TOKEN_STATUS_VAL="$2"; shift 2 ;;
     --save)           SAVE_TOKEN=true; shift ;;
+    --dry-run)        DRY_RUN=true; shift ;;
+    --yes)            YES=true; shift ;;
     *)
       if [[ -z "$ITEM_ID" ]]; then
         ITEM_ID="$1"; shift
@@ -297,18 +299,42 @@ print(json.dumps([{
 
   resolve)
     [[ -z "$ITEM_ID" ]] && { echo "Usage: rollbar.sh resolve <item_id>" >&2; exit 1; }
+    if [[ "$DRY_RUN" == "true" ]]; then
+      echo "{\"dry_run\": true, \"action\": \"resolve\", \"item_id\": \"$ITEM_ID\"}"
+      exit 0
+    fi
+    if [[ "$YES" != "true" ]]; then
+      echo "⚠️  This will resolve item $ITEM_ID and suppress future alerts. Pass --yes to confirm, or --dry-run to preview." >&2
+      exit 1
+    fi
     api_patch "item/$ITEM_ID" '{"status":"resolved"}' | python3 -m json.tool 2>/dev/null || \
       api_patch "item/$ITEM_ID" '{"status":"resolved"}'
     ;;
 
   mute)
     [[ -z "$ITEM_ID" ]] && { echo "Usage: rollbar.sh mute <item_id>" >&2; exit 1; }
+    if [[ "$DRY_RUN" == "true" ]]; then
+      echo "{\"dry_run\": true, \"action\": \"mute\", \"item_id\": \"$ITEM_ID\"}"
+      exit 0
+    fi
+    if [[ "$YES" != "true" ]]; then
+      echo "⚠️  This will mute item $ITEM_ID and stop all alerts for it. Pass --yes to confirm, or --dry-run to preview." >&2
+      exit 1
+    fi
     api_patch "item/$ITEM_ID" '{"status":"muted"}' | python3 -m json.tool 2>/dev/null || \
       api_patch "item/$ITEM_ID" '{"status":"muted"}'
     ;;
 
   activate)
     [[ -z "$ITEM_ID" ]] && { echo "Usage: rollbar.sh activate <item_id>" >&2; exit 1; }
+    if [[ "$DRY_RUN" == "true" ]]; then
+      echo "{\"dry_run\": true, \"action\": \"activate\", \"item_id\": \"$ITEM_ID\"}"
+      exit 0
+    fi
+    if [[ "$YES" != "true" ]]; then
+      echo "⚠️  This will reopen item $ITEM_ID. Pass --yes to confirm, or --dry-run to preview." >&2
+      exit 1
+    fi
     api_patch "item/$ITEM_ID" '{"status":"active"}' | python3 -m json.tool 2>/dev/null || \
       api_patch "item/$ITEM_ID" '{"status":"active"}'
     ;;
@@ -372,6 +398,14 @@ print(json.dumps([{
   project-token-create)
     [[ -z "$PROJECT_ID" ]] && { echo "Error: --project-id required" >&2; exit 1; }
     [[ -z "$TOKEN_NAME" ]] && { echo "Error: --name required (token name)" >&2; exit 1; }
+    if [[ "$DRY_RUN" == "true" ]]; then
+      echo "{\"dry_run\": true, \"action\": \"project-token-create\", \"project_id\": \"$PROJECT_ID\", \"name\": \"$TOKEN_NAME\", \"scopes\": \"$SCOPES\"}"
+      exit 0
+    fi
+    if [[ "$YES" != "true" ]]; then
+      echo "⚠️  This will create a new $SCOPES access token for project $PROJECT_ID. Pass --yes to confirm, or --dry-run to preview." >&2
+      exit 1
+    fi
     # Build scopes array from comma-separated string
     SCOPES_JSON=$(python3 -c "import json; print(json.dumps('$SCOPES'.split(',')))")
     PAYLOAD=$(python3 -c "
@@ -401,6 +435,14 @@ print(data.get('result', {}).get('access_token', ''))
     # ITEM_ID is used as the token value/id to update
     [[ -z "$ITEM_ID" ]] && { echo "Error: Usage: rollbar.sh project-token-update <token_id_or_value> --project-id <id> [--token-status enabled|disabled]" >&2; exit 1; }
     [[ -z "$PROJECT_ID" ]] && { echo "Error: --project-id required" >&2; exit 1; }
+    if [[ "$DRY_RUN" == "true" ]]; then
+      echo "{\"dry_run\": true, \"action\": \"project-token-update\", \"token_id\": \"$ITEM_ID\", \"project_id\": \"$PROJECT_ID\", \"token_status\": \"$TOKEN_STATUS_VAL\"}"
+      exit 0
+    fi
+    if [[ "$YES" != "true" ]]; then
+      echo "⚠️  This will update token $ITEM_ID on project $PROJECT_ID. Pass --yes to confirm, or --dry-run to preview." >&2
+      exit 1
+    fi
     PATCH_DATA="{}"
     [[ -n "$TOKEN_STATUS_VAL" ]] && PATCH_DATA=$(python3 -c "import json; print(json.dumps({'status': '$TOKEN_STATUS_VAL'}))")
     api_patch "project/$PROJECT_ID/access_token/$ITEM_ID" "$PATCH_DATA" | \
